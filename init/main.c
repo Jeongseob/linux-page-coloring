@@ -78,6 +78,7 @@
 #include <linux/context_tracking.h>
 #include <linux/random.h>
 #include <linux/list.h>
+#include <linux/colormask.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -990,6 +991,7 @@ static noinline void __init kernel_init_freeable(void)
 	 * init can run on any cpu.
 	 */
 	set_cpus_allowed_ptr(current, cpu_all_mask);
+	set_colors_allowed_ptr(current, color_all_mask);
 
 	cad_pid = task_pid(current);
 

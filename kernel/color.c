@@ -1,16 +1,71 @@
 #include <linux/syscalls.h>
 #include <linux/colormask.h>
+#include <linux/kernel.h>
+#include <linux/threads.h>
 
-long set_color(pid_t pid, const struct cpumask *in_mask)
+const DECLARE_BITMAP(color_all_bits, NR_COLORS) = COLOR_BITS_ALL;
+EXPORT_SYMBOL(color_all_bits);
+
+static struct task_struct *find_process_by_pid(pid_t pid)
 {
-	return 0;
+	return pid ? find_task_by_vpid(pid) : current;
 }
 
-long get_color(pid_t pid, struct cpumask *mask)
+void do_set_colors_allowed(struct task_struct *p, const struct colormask *new_mask)
 {
-	return 0;
+	colormask_copy(&p->colors_allowed, new_mask);
 }
 
+int set_colors_allowed_ptr(struct task_struct *p, const struct colormask *new_mask)
+{
+	int ret = 0;
+
+	do_set_colors_allowed(p, new_mask);
+		
+	return ret;
+}
+
+long set_color(pid_t pid, const struct colormask *in_mask)
+{
+	struct task_struct *p;
+	int retval;
+
+	p = find_process_by_pid(pid);
+	if (!p) {
+		return -ESRCH;
+	}
+
+	retval = set_colors_allowed_ptr(p, in_mask);
+
+	return retval;
+}
+
+long get_color(pid_t pid, struct colormask *mask)
+{
+	struct task_struct *p;
+	int retval = 0;
+
+	p = find_process_by_pid(pid);
+	if (!p) {
+		retval = -ESRCH;
+		goto out;
+	}
+	
+	colormask_copy(mask, &p->colors_allowed);
+
+out:
+	return retval;
+}
+
+static int get_user_color_mask(unsigned long __user *user_mask_ptr, unsigned len, struct colormask *new_mask)
+{
+	if (len < colormask_size())
+		colormask_clear(new_mask);
+	else if (len > colormask_size())
+		len = colormask_size();
+
+	return copy_from_user(new_mask, user_mask_ptr, len) ? -EFAULT : 0;
+}
 
 /**
  * sys_set_color - set the page color of a process
@@ -23,18 +78,13 @@ long get_color(pid_t pid, struct cpumask *mask)
 SYSCALL_DEFINE3(set_color, pid_t, pid, unsigned int, len,
 		unsigned long __user *, user_mask_ptr)
 {
-	/*
-	cpumask_var_t new_mask;
+	colormask_var_t new_mask;
 	int retval;
 
-	if (!alloc_cpumask_var(&new_mask, GFP_KERNEL))
-		return -ENOMEM;
-
-	retval = get_user_cpu_mask(user_mask_ptr, len, new_mask);
-	if (retval == 0)
-		retval = sched_setaffinity(pid, new_mask);
-	free_cpumask_var(new_mask);
-	*/
+	retval = get_user_color_mask(user_mask_ptr, len, new_mask);
+	if ( retval == 0 )
+		retval = set_color(pid, new_mask);
+	
 	return 0;
 }
 
@@ -50,29 +100,29 @@ SYSCALL_DEFINE3(set_color, pid_t, pid, unsigned int, len,
 SYSCALL_DEFINE3(get_color, pid_t, pid, unsigned int, len,
 		unsigned long __user *, user_mask_ptr)
 {
-	/*
 	int ret;
-	cpumask_var_t mask;
+	colormask_var_t mask;
 
-	if ((len * BITS_PER_BYTE) < nr_cpu_ids)
+	if ((len * BITS_PER_BYTE) < NR_COLORS)
 		return -EINVAL;
 	if (len & (sizeof(unsigned long)-1))
 		return -EINVAL;
+	
+	ret = get_color(pid, mask);
 
-	if (!alloc_cpumask_var(&mask, GFP_KERNEL))
-		return -ENOMEM;
-
-	ret = sched_getaffinity(pid, mask);
 	if (ret == 0) {
-		size_t retlen = min_t(size_t, len, cpumask_size());
 
-		if (copy_to_user(user_mask_ptr, mask, retlen))
+		size_t retlen = min_t(size_t, len, colormask_size());
+		
+		if (copy_to_user(user_mask_ptr, mask, retlen)) {
 			ret = -EFAULT;
-		else
+		}
+		else {
 			ret = retlen;
+		}
+
 	}
-	free_cpumask_var(mask);
-	*/
-	return 0;
+
+	return ret;
 }
 
