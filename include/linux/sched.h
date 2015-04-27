@@ -22,6 +22,7 @@ struct sched_param {
 #include <linux/rbtree.h>
 #include <linux/thread_info.h>
 #include <linux/cpumask.h>
+#include <linux/colormask.h>
 #include <linux/errno.h>
 #include <linux/nodemask.h>
 #include <linux/mm_types.h>
@@ -1272,6 +1273,7 @@ struct task_struct {
 	unsigned int policy;
 	int nr_cpus_allowed;
 	cpumask_t cpus_allowed;
+	colormask_t colors_allowed;
 
 #ifdef CONFIG_PREEMPT_RCU
 	int rcu_read_lock_nesting;
