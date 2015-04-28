@@ -2798,8 +2798,12 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	int classzone_idx;
 	
 	/* Hooking test */
-	if (order == 0 && !colormask_empty(&current->colors_allowed)) {
-		alloc_color_page(0);
+	if (order == 0 && !colormask_empty(&(current->colors_allowed))) {
+		page = alloc_color_page(&current->colors_allowed);
+
+		if (page) {
+			return page;
+		}
 	}
 
 	gfp_mask &= gfp_allowed_mask;
@@ -2861,7 +2865,9 @@ out:
 	if (unlikely(!page && read_mems_allowed_retry(cpuset_mems_cookie)))
 		goto retry_cpuset;
 
-	page->is_colored = 0;
+	if (page) {
+		page->is_colored = 0;
+	}
 	return page;
 }
 EXPORT_SYMBOL(__alloc_pages_nodemask);
@@ -6568,7 +6574,7 @@ bool is_free_buddy_page(struct page *page)
 
 ///////////////////////////////////
 
-struct page* alloc_color_page(unsigned int color)
+struct page* alloc_color_page(colormask_t *mask)
 {
 	printk(KERN_INFO "alloc_color_page called!\n");
 
@@ -6622,10 +6628,12 @@ void __init colormem_init(int num_pages)
 	}
 
 	printk(KERN_INFO "colormem_init success!\n");
+#if 0
 	printk(KERN_INFO "Free pages per color\n");
 	for (i = 0; i < NR_COLORS; i++) {
 		printk("[%d]: %ld\n", i, color_area[i].nr_free);
 	}
+#endif
 		
 	coloring_enabled = 1;
 }

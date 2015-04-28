@@ -6,6 +6,7 @@
 #include <linux/stddef.h>
 #include <linux/linkage.h>
 #include <linux/topology.h>
+#include <linux/colormask.h>
 
 struct vm_area_struct;
 
@@ -298,7 +299,7 @@ static inline void arch_free_page(struct page *page, int order) { }
 static inline void arch_alloc_page(struct page *page, int order) { }
 #endif
 
-struct page* alloc_color_page(unsigned int color);
+struct page* alloc_color_page(colormask_t *mask);
 void free_color_page(struct page* page);
 
 struct page *
