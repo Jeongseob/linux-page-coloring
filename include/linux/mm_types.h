@@ -42,6 +42,7 @@ struct address_space;
  * and lru list pointers also.
  */
 struct page {
+	struct list_head color;
 	/* First double word block */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */

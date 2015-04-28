@@ -65,6 +65,14 @@
 #include <asm/div64.h>
 #include "internal.h"
 
+struct free_color_area {
+	struct list_head free_list;
+	unsigned long nr_free;
+};
+
+struct free_color_area* color_area; 
+int	coloring_enabled = 0;
+
 /* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
 static DEFINE_MUTEX(pcp_batch_high_lock);
 #define MIN_PERCPU_PAGELIST_FRACTION	(8)
@@ -2819,6 +2827,10 @@ retry_cpuset:
 	if (!preferred_zone)
 		goto out;
 	classzone_idx = zonelist_zone_idx(preferred_zoneref);
+
+	if ( coloring_enabled && *current->colors_allowed.bits != 0 ) {
+		printk("Pid:%d memory allocated from color[%lx]\n", current->pid, *current->colors_allowed.bits);
+	}
 
 	/* First allocation attempt */
 	page = get_page_from_freelist(gfp_mask|__GFP_HARDWALL, nodemask, order,
@@ -6546,3 +6558,47 @@ bool is_free_buddy_page(struct page *page)
 	return order < MAX_ORDER;
 }
 #endif
+
+void __init colormem_init(int num_pages)
+{
+	int i;
+	unsigned int nids[MAX_NUMNODES];
+	struct page *page;
+	unsigned int color;
+	unsigned long pfn;
+
+	printk(KERN_INFO "colormem_init called\n");
+
+	color_area = kmalloc(sizeof(struct free_color_area) * NR_COLORS, GFP_KERNEL);
+	if (!color_area) {
+		printk(KERN_ERR "kmalloc failed in color_area\n");
+		return;
+	}
+
+	for (i = 0; i < NR_COLORS; i++) {
+		INIT_LIST_HEAD(&color_area[i].free_list);
+	}
+
+	for (i = 0; i < MAX_NUMNODES; i++) {
+		if (node_online(i)) {
+			nids[i] = 0;
+		}
+	}
+	
+	for (i = 0; i < num_pages; i++) {
+		page = alloc_page(GFP_HIGHUSER | __GFP_COMP);
+
+		if (!page) {
+			printk(KERN_ERR "failed to alloc page\n");
+			return;
+		}
+
+		pfn = page_to_pfn(page);
+		color = (pfn % NR_COLORS);
+		list_add(&page->color, &color_area[color].free_list);
+		color_area[color].nr_free++;
+	}
+
+	printk(KERN_INFO "colormem_init success!\n");
+	coloring_enabled = 1;
+}
