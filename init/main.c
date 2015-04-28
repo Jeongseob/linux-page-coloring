@@ -993,8 +993,6 @@ static noinline void __init kernel_init_freeable(void)
 	set_cpus_allowed_ptr(current, cpu_all_mask);
 	set_colors_allowed_ptr(current, color_all_mask);
 	colormem_init(1024);
-	printk("cpu_all_mask: %lx\n", *cpu_all_mask->bits);
-	printk("color_all_mask: %lx\n", *color_all_mask->bits);
 
 	cad_pid = task_pid(current);
 

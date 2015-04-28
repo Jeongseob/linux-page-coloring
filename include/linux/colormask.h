@@ -51,6 +51,12 @@ static inline void colormask_copy(struct colormask* dstp,
 	bitmap_copy(colormask_bits(dstp), colormask_bits(srcp), NR_COLORS);
 }
 
+static inline bool colormask_empty(const struct colormask *srcp)
+{
+	return bitmap_empty(colormask_bits(srcp), NR_COLORS);
+}
+
+
 int set_colors_allowed_ptr(struct task_struct *p, const struct colormask *new_mask);
 
 #endif

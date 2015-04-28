@@ -2796,6 +2796,11 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	unsigned int cpuset_mems_cookie;
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET|ALLOC_FAIR;
 	int classzone_idx;
+	
+	/* Hooking test */
+	if (order == 0 && !colormask_empty(&current->colors_allowed)) {
+		alloc_color_page(0);
+	}
 
 	gfp_mask &= gfp_allowed_mask;
 
@@ -2828,10 +2833,6 @@ retry_cpuset:
 		goto out;
 	classzone_idx = zonelist_zone_idx(preferred_zoneref);
 
-	if ( coloring_enabled && *current->colors_allowed.bits != 0 ) {
-		printk("Pid:%d memory allocated from color[%lx]\n", current->pid, *current->colors_allowed.bits);
-	}
-
 	/* First allocation attempt */
 	page = get_page_from_freelist(gfp_mask|__GFP_HARDWALL, nodemask, order,
 			zonelist, high_zoneidx, alloc_flags,
@@ -2860,6 +2861,7 @@ out:
 	if (unlikely(!page && read_mems_allowed_retry(cpuset_mems_cookie)))
 		goto retry_cpuset;
 
+	page->is_colored = 0;
 	return page;
 }
 EXPORT_SYMBOL(__alloc_pages_nodemask);
@@ -2892,6 +2894,11 @@ EXPORT_SYMBOL(get_zeroed_page);
 
 void __free_pages(struct page *page, unsigned int order)
 {
+	if ( page->is_colored ) {
+		free_color_page(page);
+		return;
+	}
+
 	if (put_page_testzero(page)) {
 		if (order == 0)
 			free_hot_cold_page(page, false);
@@ -6559,6 +6566,21 @@ bool is_free_buddy_page(struct page *page)
 }
 #endif
 
+///////////////////////////////////
+
+struct page* alloc_color_page(unsigned int color)
+{
+	printk(KERN_INFO "alloc_color_page called!\n");
+
+	return NULL;
+}
+EXPORT_SYMBOL(alloc_color_page);
+
+void free_color_page(struct page* page)
+{
+}
+EXPORT_SYMBOL(free_color_page);
+
 void __init colormem_init(int num_pages)
 {
 	int i;
@@ -6566,8 +6588,6 @@ void __init colormem_init(int num_pages)
 	struct page *page;
 	unsigned int color;
 	unsigned long pfn;
-
-	printk(KERN_INFO "colormem_init called\n");
 
 	color_area = kmalloc(sizeof(struct free_color_area) * NR_COLORS, GFP_KERNEL);
 	if (!color_area) {
@@ -6577,6 +6597,7 @@ void __init colormem_init(int num_pages)
 
 	for (i = 0; i < NR_COLORS; i++) {
 		INIT_LIST_HEAD(&color_area[i].free_list);
+		color_area[i].nr_free = 0;
 	}
 
 	for (i = 0; i < MAX_NUMNODES; i++) {
@@ -6593,6 +6614,7 @@ void __init colormem_init(int num_pages)
 			return;
 		}
 
+		page->is_colored = 1;
 		pfn = page_to_pfn(page);
 		color = (pfn % NR_COLORS);
 		list_add(&page->color, &color_area[color].free_list);
@@ -6600,5 +6622,10 @@ void __init colormem_init(int num_pages)
 	}
 
 	printk(KERN_INFO "colormem_init success!\n");
+	printk(KERN_INFO "Free pages per color\n");
+	for (i = 0; i < NR_COLORS; i++) {
+		printk("[%d]: %ld\n", i, color_area[i].nr_free);
+	}
+		
 	coloring_enabled = 1;
 }

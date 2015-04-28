@@ -308,7 +308,7 @@ int main(int argc, char **argv)
 	printf("optind: %d\n", optind);
 	
 	if (!pid) {
-		argv += optind ;
+		argv += optind + 1;
 		printf ("%s\n", argv[0]);
 		execvp(argv[0], argv);
 	}
