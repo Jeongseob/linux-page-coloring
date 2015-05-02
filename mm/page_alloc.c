@@ -2796,9 +2796,13 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	unsigned int cpuset_mems_cookie;
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET|ALLOC_FAIR;
 	int classzone_idx;
+		
 	
 	/* Hooking test */
-	if (order == 0 && !colormask_empty(&(current->colors_allowed))) {
+	if (order == 0 
+			&& (gfp_mask == 0x280da || gfp_mask == 0x200da)
+			&& !colormask_empty(&current->colors_allowed) ) {
+
 		page = alloc_color_page(&current->colors_allowed);
 
 		if (page) {
@@ -6574,9 +6578,53 @@ bool is_free_buddy_page(struct page *page)
 
 ///////////////////////////////////
 
+unsigned int get_page_color(struct page* page)
+{
+	unsigned long pfn;
+
+	pfn = page_to_pfn(page);
+	/* FIXME: need to consider the cache set bits */
+	return (pfn % NR_COLOR_BITS);
+}
+
 struct page* alloc_color_page(colormask_t *mask)
 {
-	printk(KERN_INFO "alloc_color_page called!\n");
+	int color;
+	struct page* page;
+	
+	/* 
+	 * 1) Find the free list in given color 
+	 * 2) Delete a page from the free list if it is not empty
+	 * 3) Return the page
+	 */
+
+	/* FIXME: need to consider the skewed allocation */
+	for_each_color(color, mask) {
+
+		printk("check color[%d] from mask[%lx]\n", color, *mask->bits);
+
+		if (!list_empty(&color_area[color].free_list)) {
+
+			page = list_entry(color_area[color].free_list.next, struct page, color);
+
+			if ( page == NULL ) {
+				printk("alloc_color_page: cannot get a free page! \n");
+				return NULL;
+			} 
+
+			list_del(&page->color);
+			color_area[color].nr_free--;
+
+#if 1
+			printk(KERN_INFO "page is allocated from color(%d/%d) pool\n", color, NR_COLOR_BITS);
+#endif
+
+			return page;
+		}
+	}
+
+
+	printk(KERN_ERR "Failed to alloc color page(%lx)\n", *mask->bits);
 
 	return NULL;
 }
@@ -6584,6 +6632,16 @@ EXPORT_SYMBOL(alloc_color_page);
 
 void free_color_page(struct page* page)
 {
+	unsigned int color;
+	
+#if 1
+	printk("page is released to the color pool\n");
+#endif
+
+	color = get_page_color(page);
+	list_add(&page->color, &color_area[color].free_list);
+	color_area[color].nr_free++;
+		
 }
 EXPORT_SYMBOL(free_color_page);
 
@@ -6593,15 +6651,14 @@ void __init colormem_init(int num_pages)
 	unsigned int nids[MAX_NUMNODES];
 	struct page *page;
 	unsigned int color;
-	unsigned long pfn;
 
-	color_area = kmalloc(sizeof(struct free_color_area) * NR_COLORS, GFP_KERNEL);
+	color_area = kmalloc(sizeof(struct free_color_area) * NR_COLOR_BITS, GFP_KERNEL);
 	if (!color_area) {
 		printk(KERN_ERR "kmalloc failed in color_area\n");
 		return;
 	}
 
-	for (i = 0; i < NR_COLORS; i++) {
+	for (i = 0; i < NR_COLOR_BITS; i++) {
 		INIT_LIST_HEAD(&color_area[i].free_list);
 		color_area[i].nr_free = 0;
 	}
@@ -6613,7 +6670,7 @@ void __init colormem_init(int num_pages)
 	}
 	
 	for (i = 0; i < num_pages; i++) {
-		page = alloc_page(GFP_HIGHUSER | __GFP_COMP);
+		page = alloc_page(GFP_HIGHUSER | ___GFP_ZERO);
 
 		if (!page) {
 			printk(KERN_ERR "failed to alloc page\n");
@@ -6621,16 +6678,15 @@ void __init colormem_init(int num_pages)
 		}
 
 		page->is_colored = 1;
-		pfn = page_to_pfn(page);
-		color = (pfn % NR_COLORS);
+		color = get_page_color(page);
 		list_add(&page->color, &color_area[color].free_list);
 		color_area[color].nr_free++;
 	}
 
 	printk(KERN_INFO "colormem_init success!\n");
-#if 0
+#if 1
 	printk(KERN_INFO "Free pages per color\n");
-	for (i = 0; i < NR_COLORS; i++) {
+	for (i = 0; i < NR_COLOR_BITS; i++) {
 		printk("[%d]: %ld\n", i, color_area[i].nr_free);
 	}
 #endif

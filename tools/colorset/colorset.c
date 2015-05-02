@@ -248,7 +248,7 @@ int main(int argc, char **argv)
 
 	memset(&cs, 0, sizeof(cs));
 
-	while ((c = getopt(argc, argv, "ph")) != -1) {
+	while ((c = getopt(argc, argv, "+ph")) != -1) {
 		switch (c) {
 		case 'p':
 			pid = atoi(argv[argc - 1]);
