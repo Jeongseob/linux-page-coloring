@@ -1274,6 +1274,7 @@ struct task_struct {
 	int nr_cpus_allowed;
 	cpumask_t cpus_allowed;
 	colormask_t colors_allowed;
+	int	last_color;
 
 #ifdef CONFIG_PREEMPT_RCU
 	int rcu_read_lock_nesting;

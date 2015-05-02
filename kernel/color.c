@@ -3,7 +3,7 @@
 #include <linux/kernel.h>
 #include <linux/threads.h>
 
-const DECLARE_BITMAP(color_all_bits, NR_COLOR_BITS) = COLOR_BITS_ALL;
+const DECLARE_BITMAP(color_all_bits, NR_COLORS) = COLOR_BITS_ALL;
 EXPORT_SYMBOL(color_all_bits);
 
 static struct task_struct *find_process_by_pid(pid_t pid)
@@ -21,6 +21,7 @@ int set_colors_allowed_ptr(struct task_struct *p, const struct colormask *new_ma
 	int ret = 0;
 
 	do_set_colors_allowed(p, new_mask);
+	p->last_color = -1;
 		
 	return ret;
 }
@@ -103,7 +104,7 @@ SYSCALL_DEFINE3(get_color, pid_t, pid, unsigned int, len,
 	int ret;
 	colormask_var_t mask;
 
-	if ((len * BITS_PER_BYTE) < NR_COLOR_BITS)
+	if ((len * BITS_PER_BYTE) < NR_COLORS)
 		return -EINVAL;
 	if (len & (sizeof(unsigned long)-1))
 		return -EINVAL;

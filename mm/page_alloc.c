@@ -2803,9 +2803,14 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 			&& (gfp_mask == 0x280da || gfp_mask == 0x200da)
 			&& !colormask_empty(&current->colors_allowed) ) {
 
-		page = alloc_color_page(&current->colors_allowed);
+		page = alloc_color_page(&current->colors_allowed, current->last_color);
 
 		if (page) {
+			current->last_color++;
+			if (current->last_color == 3 ) {
+				current->last_color = -1;
+			}
+
 			return page;
 		}
 	}
@@ -6584,12 +6589,11 @@ unsigned int get_page_color(struct page* page)
 
 	pfn = page_to_pfn(page);
 	/* FIXME: need to consider the cache set bits */
-	return (pfn % NR_COLOR_BITS);
+	return (pfn % NR_COLORS);
 }
 
-struct page* alloc_color_page(colormask_t *mask)
+struct page* alloc_color_page(colormask_t *mask, int color)
 {
-	int color;
 	struct page* page;
 	
 	/* 
@@ -6598,8 +6602,8 @@ struct page* alloc_color_page(colormask_t *mask)
 	 * 3) Return the page
 	 */
 
-	/* FIXME: need to consider the skewed allocation */
-	for_each_color(color, mask) {
+	/* FIXME: it will be thread unsafe */
+	for_each_color_from(color, mask) {
 
 		printk("check color[%d] from mask[%lx]\n", color, *mask->bits);
 
@@ -6616,7 +6620,7 @@ struct page* alloc_color_page(colormask_t *mask)
 			color_area[color].nr_free--;
 
 #if 1
-			printk(KERN_INFO "page is allocated from color(%d/%d) pool\n", color, NR_COLOR_BITS);
+			printk(KERN_INFO "page is allocated from color(%d/%d) pool\n", color, NR_COLORS);
 #endif
 
 			return page;
@@ -6652,13 +6656,13 @@ void __init colormem_init(int num_pages)
 	struct page *page;
 	unsigned int color;
 
-	color_area = kmalloc(sizeof(struct free_color_area) * NR_COLOR_BITS, GFP_KERNEL);
+	color_area = kmalloc(sizeof(struct free_color_area) * NR_COLORS, GFP_KERNEL);
 	if (!color_area) {
 		printk(KERN_ERR "kmalloc failed in color_area\n");
 		return;
 	}
 
-	for (i = 0; i < NR_COLOR_BITS; i++) {
+	for (i = 0; i < NR_COLORS; i++) {
 		INIT_LIST_HEAD(&color_area[i].free_list);
 		color_area[i].nr_free = 0;
 	}
@@ -6685,8 +6689,9 @@ void __init colormem_init(int num_pages)
 
 	printk(KERN_INFO "colormem_init success!\n");
 #if 1
+	printk(KERN_INFO "Number of colors: %d\n", NR_COLORS);
 	printk(KERN_INFO "Free pages per color\n");
-	for (i = 0; i < NR_COLOR_BITS; i++) {
+	for (i = 0; i < NR_COLORS; i++) {
 		printk("[%d]: %ld\n", i, color_area[i].nr_free);
 	}
 #endif
