@@ -992,7 +992,8 @@ static noinline void __init kernel_init_freeable(void)
 	 */
 	set_cpus_allowed_ptr(current, cpu_all_mask);
 	set_colors_allowed_ptr(current, color_all_mask);
-	colormem_init(262144);
+	//colormem_init(262144);
+	colormem_init(RESERVE_COLOR_PAGES);
 
 	cad_pid = task_pid(current);
 

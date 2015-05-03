@@ -43,7 +43,6 @@ struct address_space;
  */
 struct page {
 	struct list_head color;
-	unsigned int is_colored:1;
 	/* First double word block */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */

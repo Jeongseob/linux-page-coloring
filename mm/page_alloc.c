@@ -2797,10 +2797,10 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET|ALLOC_FAIR;
 	int classzone_idx;
 		
-	
 	/* Hooking test */
 	if (order == 0 
-			&& (gfp_mask == 0x280da || gfp_mask == 0x200da)
+			// (___GFP_HARDWALL | ___GFP_ZERO | ___GFP_FS | ___GFP_IO | ___GFP_WAIT | ___GFP_MOVABLE | ___GFP_HIGHMEM)
+			&& (gfp_mask == 0x280da || gfp_mask == 0x200da)		
 			&& !colormask_empty(&current->colors_allowed) ) {
 
 		page = alloc_color_page(&current->colors_allowed, current->last_color);
@@ -2874,9 +2874,6 @@ out:
 	if (unlikely(!page && read_mems_allowed_retry(cpuset_mems_cookie)))
 		goto retry_cpuset;
 
-	if (page) {
-		page->is_colored = 0;
-	}
 	return page;
 }
 EXPORT_SYMBOL(__alloc_pages_nodemask);
@@ -2909,11 +2906,6 @@ EXPORT_SYMBOL(get_zeroed_page);
 
 void __free_pages(struct page *page, unsigned int order)
 {
-	if ( page->is_colored ) {
-		free_color_page(page);
-		return;
-	}
-
 	if (put_page_testzero(page)) {
 		if (order == 0)
 			free_hot_cold_page(page, false);
@@ -6589,12 +6581,36 @@ unsigned int get_page_color(struct page* page)
 
 	pfn = page_to_pfn(page);
 	/* FIXME: need to consider the cache set bits */
+
 	return (pfn % NR_COLORS);
+}
+
+int reserve_color_pages(int num_pages)
+{
+	int i;
+	struct page *page;
+	unsigned int color;
+
+	for (i = 0; i < num_pages; i++) {
+		page = alloc_page(GFP_HIGHUSER | ___GFP_ZERO);
+
+		if (!page) {
+			printk(KERN_ERR "failed to alloc page\n");
+			return -1;
+		}
+
+		color = get_page_color(page);
+		list_add(&page->color, &color_area[color].free_list);
+		color_area[color].nr_free++;
+	}
+
+	return 0;
 }
 
 struct page* alloc_color_page(colormask_t *mask, int color)
 {
 	struct page* page;
+	int dup_color = color;
 	
 	/* 
 	 * 1) Find the free list in given color 
@@ -6603,9 +6619,8 @@ struct page* alloc_color_page(colormask_t *mask, int color)
 	 */
 
 	/* FIXME: it will be thread unsafe */
+retry_alloc_color_page:
 	for_each_color_from(color, mask) {
-
-		printk("check color[%d] from mask[%lx]\n", color, *mask->bits);
 
 		if (!list_empty(&color_area[color].free_list)) {
 
@@ -6619,42 +6634,29 @@ struct page* alloc_color_page(colormask_t *mask, int color)
 			list_del(&page->color);
 			color_area[color].nr_free--;
 
-#if 1
-			printk(KERN_INFO "page is allocated from color(%d/%d) pool\n", color, NR_COLORS);
+#if 0
+			printk(KERN_INFO "page(%lx) is allocated from color(%d/%d) pool\n", page_to_pfn(page), color, NR_COLORS-1);
 #endif
 
 			return page;
 		}
 	}
 
-
-	printk(KERN_ERR "Failed to alloc color page(%lx)\n", *mask->bits);
+	if ( reserve_color_pages(RESERVE_COLOR_PAGES) != -1) {
+		color = dup_color;
+		goto retry_alloc_color_page;
+	} else {
+		printk(KERN_INFO "reserve_color_pages failed\n");
+	}
 
 	return NULL;
 }
 EXPORT_SYMBOL(alloc_color_page);
 
-void free_color_page(struct page* page)
-{
-	unsigned int color;
-	
-#if 1
-	printk("page is released to the color pool\n");
-#endif
-
-	color = get_page_color(page);
-	list_add(&page->color, &color_area[color].free_list);
-	color_area[color].nr_free++;
-		
-}
-EXPORT_SYMBOL(free_color_page);
-
 void __init colormem_init(int num_pages)
 {
 	int i;
 	unsigned int nids[MAX_NUMNODES];
-	struct page *page;
-	unsigned int color;
 
 	color_area = kmalloc(sizeof(struct free_color_area) * NR_COLORS, GFP_KERNEL);
 	if (!color_area) {
@@ -6673,21 +6675,10 @@ void __init colormem_init(int num_pages)
 		}
 	}
 	
-	for (i = 0; i < num_pages; i++) {
-		page = alloc_page(GFP_HIGHUSER | ___GFP_ZERO);
-
-		if (!page) {
-			printk(KERN_ERR "failed to alloc page\n");
-			return;
-		}
-
-		page->is_colored = 1;
-		color = get_page_color(page);
-		list_add(&page->color, &color_area[color].free_list);
-		color_area[color].nr_free++;
+	if ( reserve_color_pages(num_pages) != -1 ) {
+		printk(KERN_INFO "colormem_init success!\n");
 	}
 
-	printk(KERN_INFO "colormem_init success!\n");
 #if 1
 	printk(KERN_INFO "Number of colors: %d\n", NR_COLORS);
 	printk(KERN_INFO "Free pages per color\n");

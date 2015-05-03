@@ -5,6 +5,7 @@
 #include <linux/threads.h>
 #include <linux/bitmap.h>
 
+#define RESERVE_COLOR_PAGES		262144	// 262144 * 4KB = 1GB
 #define NR_COLORS	4	/* FIXME: num of CPUs */
 
 //#define	CACHE_SET_BITS	13
