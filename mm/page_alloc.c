@@ -71,7 +71,7 @@ struct free_color_area {
 };
 
 struct free_color_area* color_area; 
-int	coloring_enabled = 0;
+spinlock_t* color_lock;
 
 /* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
 static DEFINE_MUTEX(pcp_batch_high_lock);
@@ -6615,8 +6615,10 @@ int reserve_color_pages(int num_pages, int target_color)
 		}
 
 		color = get_page_color(page);
+		spin_lock(&color_lock[color]);
 		list_add(&page->color, &color_area[color].free_list);
 		color_area[color].nr_free++;
+		spin_unlock(&color_lock[color]);
 	}
 
 	return 0;
@@ -6632,13 +6634,14 @@ struct page* alloc_color_page(int color)
 	 * 3) Return the page
 	 */
 
-	/* FIXME: it will be thread unsafe */
 retry_alloc_color_page:
+	spin_lock(&color_lock[color]);
 	if (!list_empty(&color_area[color].free_list)) {
 
 		page = list_entry(color_area[color].free_list.next, struct page, color);
 
 		if ( page == NULL ) {
+			spin_unlock(&color_lock[color]);
 			printk("alloc_color_page: cannot get a free page! \n");
 			return NULL;
 		} 
@@ -6646,12 +6649,14 @@ retry_alloc_color_page:
 		list_del(&page->color);
 		color_area[color].nr_free--;
 
-#if 1
+#if 0
 		printk(KERN_INFO "page(%lx) is allocated from color(%d/%d) pool\n", page_to_pfn(page), color, NR_COLORS-1);
 #endif
 
+		spin_unlock(&color_lock[color]);
 		return page;
 	}
+	spin_unlock(&color_lock[color]);
 
 	if ( reserve_color_pages(RESERVE_COLOR_PAGES, color) != -1) {
 		goto retry_alloc_color_page;
@@ -6674,8 +6679,15 @@ void __init colormem_init(int num_pages)
 		return;
 	}
 
+	color_lock = kmalloc(sizeof(spinlock_t) * NR_COLORS, GFP_KERNEL);
+	if (!color_lock) {
+		printk(KERN_ERR "kmalloc failed in color_lock\n");
+		return;
+	}
+
 	for (i = 0; i < NR_COLORS; i++) {
 		INIT_LIST_HEAD(&color_area[i].free_list);
+		spin_lock_init(&color_lock[i]);
 		color_area[i].nr_free = 0;
 	}
 
@@ -6698,7 +6710,4 @@ void __init colormem_init(int num_pages)
 		printk("[%d]: %ld\n", i, color_area[i].nr_free);
 	}
 #endif
-		
-	printk(KERN_INFO "nr_cpu_ids: %d\n", nr_cpu_ids);
-	coloring_enabled = 1;
 }
