@@ -300,8 +300,8 @@ static inline void arch_alloc_page(struct page *page, int order) { }
 #endif
 
 unsigned int get_page_color(struct page* page);
-int reserve_color_pages(int num_pages);
-struct page* alloc_color_page(colormask_t *mask, int color);
+int reserve_color_pages(int num_pages, int color);
+struct page* alloc_color_page(int color);
 void colormem_init(int num_pages);
 
 struct page *

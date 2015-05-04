@@ -21,7 +21,7 @@ int set_colors_allowed_ptr(struct task_struct *p, const struct colormask *new_ma
 	int ret = 0;
 
 	do_set_colors_allowed(p, new_mask);
-	p->last_color = -1;
+	p->last_color = colormask_first(new_mask);
 		
 	return ret;
 }

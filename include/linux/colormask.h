@@ -50,6 +50,7 @@ extern const DECLARE_BITMAP(color_all_bits, NR_COLORS);
 		(color) = colormask_next((color), (mask)),	\
 		(color) < NR_COLORS;)
 
+#define color_isset(color, colormask) test_bit((color), (colormask).bits)
 
 typedef struct colormask colormask_var_t[1];
 
@@ -74,11 +75,20 @@ static inline bool colormask_empty(const struct colormask *srcp)
 	return bitmap_empty(colormask_bits(srcp), NR_COLORS);
 }
 
+static inline unsigned int colormask_first(const struct colormask *srcp)
+{
+	return find_first_bit(colormask_bits(srcp), NR_COLORS);
+}
+
 static inline unsigned int colormask_next(int n, const struct colormask *srcp)
 {
 	return find_next_bit(colormask_bits(srcp), NR_COLORS, n+1);
 }
 
+static inline unsigned int colormask_weight(const struct colormask *srcp)
+{
+	return bitmap_weight(colormask_bits(srcp), NR_COLORS);
+}
 
 int set_colors_allowed_ptr(struct task_struct *p, const struct colormask *new_mask);
 
