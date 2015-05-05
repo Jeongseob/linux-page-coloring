@@ -2801,7 +2801,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	/* Hooking test */
 	if (order == 0 
 			//&& (gfp_mask == 0x280da || gfp_mask == 0x200da)
-			&& (gfp_mask == (GFP_HIGHUSER_MOVABLE | ___GFP_ZERO) || gfp_mask == GFP_HIGHUSER_MOVABLE)
+			//&& (gfp_mask == (GFP_HIGHUSER_MOVABLE | ___GFP_ZERO) || gfp_mask == GFP_HIGHUSER_MOVABLE)
 			&& !colormask_empty(&current->colors_allowed) ) {
 
 		page = alloc_color_page(current->last_color);
@@ -2922,9 +2922,12 @@ EXPORT_SYMBOL(get_zeroed_page);
 
 void __free_pages(struct page *page, unsigned int order)
 {
+	/*
 	if (page->color_flags == 1) {
-		printk("color page is released\n");
+		free_color_page(page);
+		return;
 	}
+	*/
 
 	if (put_page_testzero(page)) {
 		if (order == 0)
@@ -6594,6 +6597,18 @@ bool is_free_buddy_page(struct page *page)
 #endif
 
 ///////////////////////////////////
+void print_colorinfo(void)
+{
+	int i;
+
+	printk(KERN_INFO "Number of colors: %d\n", NR_COLORS);
+	printk(KERN_INFO "Free pages per color\n");
+	for (i = 0; i < NR_COLORS; i++) {
+		printk("[%d]: %ld\n", i, color_area[i].nr_free);
+	}
+}
+
+EXPORT_SYMBOL(print_colorinfo);
 
 unsigned int get_page_color(struct page* page)
 {
@@ -6643,7 +6658,6 @@ struct page* alloc_color_page(int color)
 	 * 3) Return the page
 	 */
 
-retry_alloc_color_page:
 	spin_lock(&color_lock[color]);
 	if (!list_empty(&color_area[color].free_list)) {
 
@@ -6667,18 +6681,23 @@ retry_alloc_color_page:
 	}
 	spin_unlock(&color_lock[color]);
 
-	/*
-	if ( reserve_color_pages(RESERVE_COLOR_PAGES, color) != -1) {
-		goto retry_alloc_color_page;
-	} else {
-		printk(KERN_INFO "reserve_color_pages failed\n");
-	}
-	*/
 	printk(KERN_ERR "There is no page in color(%d/%d)\n", color, NR_COLORS-1);
 
 	return NULL;
 }
 EXPORT_SYMBOL(alloc_color_page);
+
+
+void free_color_page(struct page* page)
+{
+	unsigned int color;
+
+	color = get_page_color(page);
+	spin_lock(&color_lock[color]);
+	list_add(&page->color, &color_area[color].free_list);
+	color_area[color].nr_free++;
+	spin_unlock(&color_lock[color]);
+}
 
 void __init colormem_init(int num_pages)
 {
@@ -6715,11 +6734,5 @@ void __init colormem_init(int num_pages)
 
 	printk(KERN_INFO "colormem_init success!\n");
 
-#if 1
-	printk(KERN_INFO "Number of colors: %d\n", NR_COLORS);
-	printk(KERN_INFO "Free pages per color\n");
-	for (i = 0; i < NR_COLORS; i++) {
-		printk("[%d]: %ld\n", i, color_area[i].nr_free);
-	}
-#endif
+	print_colorinfo();
 }
