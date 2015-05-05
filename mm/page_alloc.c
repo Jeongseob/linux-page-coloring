@@ -2800,8 +2800,8 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 		
 	/* Hooking test */
 	if (order == 0 
-			// (___GFP_HARDWALL | ___GFP_ZERO | ___GFP_FS | ___GFP_IO | ___GFP_WAIT | ___GFP_MOVABLE | ___GFP_HIGHMEM)
-			&& (gfp_mask == 0x280da || gfp_mask == 0x200da)		
+			//&& (gfp_mask == 0x280da || gfp_mask == 0x200da)
+			&& (gfp_mask == (GFP_HIGHUSER_MOVABLE | ___GFP_ZERO) || gfp_mask == GFP_HIGHUSER_MOVABLE)
 			&& !colormask_empty(&current->colors_allowed) ) {
 
 		page = alloc_color_page(current->last_color);
@@ -2886,6 +2886,10 @@ out:
 	if (unlikely(!page && read_mems_allowed_retry(cpuset_mems_cookie)))
 		goto retry_cpuset;
 
+	if ( colormask_empty(&current->colors_allowed) ) {
+		page->color_flags = 2;
+	}
+
 	return page;
 }
 EXPORT_SYMBOL(__alloc_pages_nodemask);
@@ -2918,6 +2922,10 @@ EXPORT_SYMBOL(get_zeroed_page);
 
 void __free_pages(struct page *page, unsigned int order)
 {
+	if (page->color_flags == 1) {
+		printk("color page is released\n");
+	}
+
 	if (put_page_testzero(page)) {
 		if (order == 0)
 			free_hot_cold_page(page, false);
@@ -6615,6 +6623,7 @@ int reserve_color_pages(int num_pages, int target_color)
 		}
 
 		color = get_page_color(page);
+		page->color_flags = 1;
 		spin_lock(&color_lock[color]);
 		list_add(&page->color, &color_area[color].free_list);
 		color_area[color].nr_free++;
@@ -6648,21 +6657,24 @@ retry_alloc_color_page:
 
 		list_del(&page->color);
 		color_area[color].nr_free--;
+		spin_unlock(&color_lock[color]);
 
 #if 0
-		printk(KERN_INFO "page(%lx) is allocated from color(%d/%d) pool\n", page_to_pfn(page), color, NR_COLORS-1);
+		printk(KERN_INFO "page(%lx) is allocated from color(%d/%d) pool and color_flags:%ld\n", page_to_pfn(page), color, NR_COLORS-1, page->color_flags);
 #endif
 
-		spin_unlock(&color_lock[color]);
 		return page;
 	}
 	spin_unlock(&color_lock[color]);
 
+	/*
 	if ( reserve_color_pages(RESERVE_COLOR_PAGES, color) != -1) {
 		goto retry_alloc_color_page;
 	} else {
 		printk(KERN_INFO "reserve_color_pages failed\n");
 	}
+	*/
+	printk(KERN_ERR "There is no page in color(%d/%d)\n", color, NR_COLORS-1);
 
 	return NULL;
 }
