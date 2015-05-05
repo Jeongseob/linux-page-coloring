@@ -299,7 +299,7 @@ static inline void arch_free_page(struct page *page, int order) { }
 static inline void arch_alloc_page(struct page *page, int order) { }
 #endif
 
-void print_colorinfo(void);
+void get_colorinfo(struct colorinfo* ci);
 unsigned int get_page_color(struct page* page);
 int reserve_color_pages(int num_pages, int color);
 struct page* alloc_color_page(int color);

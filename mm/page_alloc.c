@@ -68,6 +68,7 @@
 struct free_color_area {
 	struct list_head free_list;
 	unsigned long nr_free;
+	unsigned long nr_total;
 };
 
 struct free_color_area* color_area; 
@@ -6597,26 +6598,24 @@ bool is_free_buddy_page(struct page *page)
 #endif
 
 ///////////////////////////////////
-void print_colorinfo(void)
+void get_colorinfo(struct colorinfo* ci)
 {
 	int i;
 
-	printk(KERN_INFO "Number of colors: %d\n", NR_COLORS);
-	printk(KERN_INFO "Free pages per color\n");
 	for (i = 0; i < NR_COLORS; i++) {
-		printk("[%d]: %ld\n", i, color_area[i].nr_free);
+		ci[i].total_color_pages = color_area[i].nr_total;
+		ci[i].total_free_pages = color_area[i].nr_free;
 	}
+
 }
 
-EXPORT_SYMBOL(print_colorinfo);
+EXPORT_SYMBOL(get_colorinfo);
 
 unsigned int get_page_color(struct page* page)
 {
 	unsigned long pfn;
 
 	pfn = page_to_pfn(page);
-	/* FIXME: need to consider the cache set bits */
-
 	return (pfn % NR_COLORS);
 }
 
@@ -6642,6 +6641,7 @@ int reserve_color_pages(int num_pages, int target_color)
 		spin_lock(&color_lock[color]);
 		list_add(&page->color, &color_area[color].free_list);
 		color_area[color].nr_free++;
+		color_area[color].nr_total++;
 		spin_unlock(&color_lock[color]);
 	}
 
@@ -6734,5 +6734,5 @@ void __init colormem_init(int num_pages)
 
 	printk(KERN_INFO "colormem_init success!\n");
 
-	print_colorinfo();
+	
 }
