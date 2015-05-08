@@ -8,6 +8,7 @@
 #define NR_COLORS	4	/* FIXME: num of CPUs */
 #define RESERVE_COLOR_PAGES		262144 * NR_COLORS	// 262144 * 4KB = 1GB
 
+/* FIXME: it will be dependent on processor architectures */
 //#define	CACHE_SET_BITS	13
 //#define	LINE_SIZE_BITS	6		// cache_line_size()
 //#define	PAGE_SIZE_BITS	12

@@ -6615,6 +6615,7 @@ unsigned int get_page_color(struct page* page)
 {
 	unsigned long pfn;
 
+	/* FIXME: it will be dependent on processor architectures */
 	pfn = page_to_pfn(page);
 	return (pfn % NR_COLORS);
 }
@@ -6658,6 +6659,7 @@ struct page* alloc_color_page(int color)
 	 * 3) Return the page
 	 */
 
+retry_alloc_color_page:
 	spin_lock(&color_lock[color]);
 	if (!list_empty(&color_area[color].free_list)) {
 
@@ -6682,6 +6684,11 @@ struct page* alloc_color_page(int color)
 	spin_unlock(&color_lock[color]);
 
 	printk(KERN_ERR "There is no page in color(%d/%d)\n", color, NR_COLORS-1);
+	if ( reserve_color_pages(RESERVE_COLOR_PAGES, color) != -1) {
+		goto retry_alloc_color_page;
+	} else {
+		printk(KERN_INFO "reserve_color_pages failed\n");
+	}
 
 	return NULL;
 }
@@ -6733,6 +6740,4 @@ void __init colormem_init(int num_pages)
 	}
 
 	printk(KERN_INFO "colormem_init success!\n");
-
-	
 }
